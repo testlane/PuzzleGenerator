@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Worträtsel-Generator (druckfertig)</title>
+<style>
+  :root {
+    --bg: #0f172a;        /* slate-900 */
+    --muted: #94a3b8;     /* slate-400 */
+    --fg: #e5e7eb;        /* gray-200 */
+    --acc: #22d3ee;       /* cyan-400 */
+    --ok:#a7f3d0;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --radius: 12px;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--fg); margin: 0; }
+  body { display: flex; flex-direction: column; gap: 12px; }
+  header { padding: 14px 16px 0; }
+  header h1 { margin: 0 0 6px; font-size: 1.25rem; }
+  header p { margin: 0; color: var(--muted); font-size: .9rem; }
+  .container { padding: 12px 16px 24px; display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media(min-width: 920px) { .container { grid-template-columns: 340px 1fr; align-items: start; } }
+  .card {
+    background: linear-gradient(180deg, #0b1220 0%, #0b1220 60%, #0a1020 100%);
+    border: 1px solid #1f2937;
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  .card h2 { font-size: 1rem; margin: 0 0 10px; color: var(--acc); }
+  .grid { display: grid; gap: 6px; }
+  .row { display: grid; grid-auto-flow: column; gap: 6px; }
+  .cell {
+    font-family: var(--mono); text-align: center; padding: 6px 0;
+    border-radius: 6px; border: 1px solid #23314a; background: #0b1220; user-select: all;
+  }
+  .controls label { display: block; font-size: .85rem; color: var(--muted); margin-top: 8px; }
+  .controls input[type="number"], .controls input[type="text"] {
+    width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #253247; background: #0b1220; color: var(--fg); font-size: 1rem; outline: none;
+  }
+  .controls input[type="file"] { margin-top: 6px; }
+  .controls textarea {
+    width: 100%; min-height: 170px; margin-top: 6px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #253247; background: #0b1220; color: var(--fg); font-size: .95rem; font-family: var(--mono);
+  }
+  .rowbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button {
+    appearance: none; border: 0; cursor: pointer; padding: 10px 14px; border-radius: 999px; font-weight: 600;
+    background: radial-gradient(100% 100% at 0% 0%, #0ea5e9 0%, #22d3ee 100%); color: #001018;
+  }
+  button.secondary { background: #1f2937; color: var(--fg); }
+  button.warn { background: #2b2b0a; color: #ffeaa7; border: 1px solid #44420a; }
+  .hint { color: var(--muted); font-size: .85rem; margin-top: 6px; }
+  .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size:.75rem; background:#10203a; color:#a5b4fc; border:1px solid #1e2b4a; }
+  .metrics { display:flex; gap:10px; flex-wrap:wrap; }
+  .status { font-size:.9rem; color: var(--muted); }
+  .ok { color: var(--ok); }
+  .box { border: 1px dashed #2b3a57; border-radius: 10px; padding: 10px; background:#0a1222; }
+  .code { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); }
+  .divider { height:1px; background:#1f2937; margin: 12px 0; }
+
+  /* ----- PRINT LAYOUT (A4) ----- */
+  @page { size: A4 portrait; margin: 14mm; }
+  #printPage { display: none; }
+  #printPage .sheet {
+    width: 100%; height: auto; background: #fff; color: #000;
+    display: grid; grid-template-columns: 1fr 2fr; grid-template-rows: auto 1fr auto; gap: 10mm;
+    padding: 4mm;
+    box-sizing: border-box;
+  }
+  #printPage .title { grid-column: 1 / -1; font-size: 16pt; font-weight: 700; }
+  #printPage .wordlist {
+    grid-column: 1; font-size: 11pt; line-height: 1.35; white-space: pre-wrap;
+    border: 1px solid #000; padding: 6mm; border-radius: 2mm; background:#fff;
+  }
+  #printPage .gridWrap {
+    grid-column: 2; display: grid; gap: 1.5mm; align-content: start; background:#fff;
+  }
+  #printPage .gridRow { display: grid; grid-auto-flow: column; gap: 1.5mm; }
+  #printPage .gridCell {
+    width: 8.5mm; height: 8.5mm;
+    border: 0.4mm solid #000; display: flex; align-items: center; justify-content: center; font-family: var(--mono);
+    font-size: 9pt; background: #fff; color:#000;
+  }
+  #printPage .solutionBox {
+    grid-column: 1 / -1; border-top: 0.4mm solid #000; padding-top: 5mm; font-size: 12pt; background:#fff; color:#000;
+  }
+
+  /* In-Page Vorschau ohne echtes Drucken */
+  body.preview header,
+  body.preview .nonPrint,
+  body.preview .container { display:none !important; }
+  body.preview { background:#fff; color:#000; }
+  body.preview #printPage { display:block !important; padding: 10mm 14mm; }
+  .previewBar { display:none; }
+  body.preview .previewBar {
+    display:flex; gap:10px; padding:10px 14px; position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; }
+    header, .controls, .rowbtns, .hint, .hideOnPrint, .container > .card:first-child, .nonPrint, .previewBar { display:none !important; }
+    #printPage { display: block !important; }
+    .card { border: 0; }
+  }
+</style>
+</head>
+<body>
+  <header class="nonPrint">
+    <h1>Worträtsel-Generator</h1>
+    <p>Erstelle ein Puzzle und nutze dann <strong>Vorschau</strong> (mobile-freundlich) oder <strong>Drucken</strong> (Desktop).</p>
+  </header>
+
+  <div class="container nonPrint">
+    <section class="card controls">
+      <h2>Einstellungen</h2>
+      <label>Zeilen (R)<input id="rows" type="number" min="5" max="40" value="13" /></label>
+      <label>Spalten (C)<input id="cols" type="number" min="5" max="40" value="13" /></label>
+      <label>Lösungswort (Restwort; genau diese Anzahl freie Felder)<input id="solution" type="text" value="FEUERWEHR" /></label>
+      <div style="display:flex; gap:10px;">
+        <label style="flex:1;">Min. Wortlänge<input id="minlen" type="number" min="2" max="30" value="4" /></label>
+        <label style="flex:1;">Max. Wortlänge<input id="maxlen" type="number" min="2" max="30" value="10" /></label>
+      </div>
+      <div class="hint">Richtungen: 8 (E,W,S,N,SE,SW,NE,NW), annähernd gleich verteilt.</div>
+      <div class="divider"></div>
+      <h2>Wortliste</h2>
+      <input id="file" class="hideOnPrint" type="file" accept=".txt" />
+      <div class="hint hideOnPrint">Optional: TXT (eine Zeile = ein Wort). Sonst wird die Liste unten verwendet.</div>
+      <textarea id="wordlist" spellcheck="false" class="mono" placeholder="Eine Zeile pro Wort … (Umlaute/ß werden normalisiert)"></textarea>
+      <details class="hideOnPrint">
+        <summary style="margin-top:8px; cursor:pointer;">Beispiel/Werkseinstellung einfügen</summary>
+        <div class="rowbtns">
+          <button type="button" class="secondary" id="loadDefault">Standardliste laden</button>
+        </div>
+      </details>
+      <div class="divider"></div>
+      <label>Max. Versuche (Suchen bis Treffer)<input id="maxAttempts" type="number" min="1" max="200000" value="20000" /></label>
+      <div class="rowbtns">
+        <button id="run">Starten</button>
+        <button id="stop" class="warn" type="button">Stoppen</button>
+        <button id="previewBtn" class="secondary" type="button">Vorschau (Seite anzeigen)</button>
+        <button id="printBtn" class="secondary" type="button">Drucken/Export</button>
+        <button id="downloadBtn" class="secondary" type="button">App-HTML speichern</button>
+        <button id="downloadPrintOnlyBtn" class="secondary" type="button">Druckseite speichern</button>
+      </div>
+      <div id="status" class="status">Bereit.</div>
+    </section>
+
+    <section class="card">
+      <h2>Ausgabe</h2>
+      <div class="metrics">
+        <span class="pill" id="attemptsPill">Versuche: 0</span>
+        <span class="pill" id="placedPill">Platziert: 0</span>
+      </div>
+      <div id="gridHost" class="grid" style="margin-top:10px;"></div>
+      <div class="divider"></div>
+      <div class="box">
+        <strong>Wortliste (platziert, für den Solver):</strong>
+        <pre id="wordsPlain" class="code" style="margin-top:6px;"></pre>
+      </div>
+      <div class="divider"></div>
+      <div class="box">
+        <strong>Placements (Wort  Richtung  (Zeile,Spalte)):</strong>
+        <pre id="placements" class="code" style="margin-top:6px;"></pre>
+      </div>
+      <div class="divider"></div>
+      <div class="box">
+        <strong>Checksummen</strong>
+        <div class="code" style="margin-top:6px;">
+          <div>CHECKSUM_GRID_SHA1: <span id="gridSha"></span></div>
+          <div>CHECKSUM_WORDS_SHA1: <span id="wordsSha"></span></div>
+          <div>solver_leftover: <span id="leftover"></span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sticky Bar shown only in preview mode -->
+  <div class="previewBar">
+    <button id="leavePreview" class="secondary" type="button">Zurück</button>
+    <button id="systemPrint" type="button">System-Druckdialog öffnen</button>
+  </div>
+
+  <!-- Dedicated print page -->
+  <section id="printPage">
+    <div class="sheet" id="sheetRoot">
+      <div class="title">Worträtsel</div>
+      <div class="wordlist" id="printWordlist"></div>
+      <div class="gridWrap" id="printGrid"></div>
+      <div class="solutionBox">
+        <strong>Lösungswort:</strong>
+        <span id="solutionPlaceholder" style="display:inline-block; min-width: 80mm; border-bottom: 0.4mm solid #000; height: 6mm;"></span>
+      </div>
+    </div>
+  </section>
+
+<script>
+/*** ---------- Utilities ---------- ***/
+const DIRS = {
+  "E":  [0, 1], "W":  [0,-1], "S":  [1, 0], "N":  [-1,0],
+  "SE": [1, 1], "SW": [1,-1], "NE": [-1,1], "NW": [-1,-1],
+};
+const DIR_LIST = Object.keys(DIRS);
+
+function norm(s) {
+  if (!s) return "";
+  s = s.trim()
+       .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss")
+       .replace(/Ä/g,"Ae").replace(/Ö/g,"Oe").replace(/Ü/g,"Ue")
+       .replace(/[^A-Za-z]/g, "");
+  return s.toUpperCase();
+}
+function sha1hex(msg) { // tiny SHA-1 (unchanged)
+  function rotl(n,s){ return (n<<s)|(n>>> (32-s)); }
+  function tohex(i){ return ('00000000'+(i>>>0).toString(16)).slice(-8); }
+  const utf8 = new TextEncoder().encode(msg);
+  const ml = utf8.length * 8;
+  const withOne = new Uint8Array(((utf8.length + 9 + 63) >> 6) << 6);
+  withOne.set(utf8);
+  withOne[utf8.length] = 0x80;
+  const dv = new DataView(withOne.buffer);
+  dv.setUint32(withOne.length - 4, ml, false);
+  let h0=0x67452301, h1=0xEFCDAB89, h2=0x98BADCFE, h3=0x10325476, h4=0xC3D2E1F0;
+  const w = new Uint32Array(80);
+  for (let i=0;i<withOne.length;i+=64){
+    for (let j=0;j<16;j++) w[j]=dv.getUint32(i+j*4,false);
+    for (let j=16;j<80;j++) w[j]=rotl(w[j-3]^w[j-8]^w[j-14]^w[j-16],1);
+    let a=h0,b=h1,c=h2,d=h3,e=h4;
+    for (let j=0;j<80;j++){
+      const f = j<20 ? ((b&c)|((~b)&d)) : j<40 ? (b^c^d) : j<60 ? ((b&c)|(b&d)|(c&d)) : (b^c^d);
+      const k = j<20 ? 0x5A827999 : j<40 ? 0x6ED9EBA1 : j<60 ? 0x8F1BBCDC : 0xCA62C1D6;
+      const t = (rotl(a,5) + f + e + k + w[j])|0;
+      e=d; d=c; c=rotl(b,30); b=a; a=t;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0;
+  }
+  return tohex(h0)+tohex(h1)+tohex(h2)+tohex(h3)+tohex(h4);
+}
+
+class XorShift32 {
+  constructor(seed){ this.x = seed|0 || 88675123; }
+  next(){ let x=this.x; x ^= x<<13; x ^= x>>>17; x ^= x<<5; this.x=x; return (x>>>0)/4294967296; }
+  randInt(n){ return Math.floor(this.next()*n); }
+  choice(arr){ return arr[this.randInt(arr.length)]; }
+}
+
+function seedFromCrypto(){
+  try {
+    const a = new Uint32Array(1);
+    (self.crypto || window.crypto).getRandomValues(a);
+    return a[0] || (Date.now()|0);
+  } catch(e){
+    return (Date.now() ^ (Math.random()*0xFFFFFFFF))|0;
+  }
+}
+
+function shuffleInPlace(arr, rng){
+  for (let i=arr.length-1; i>0; i--){
+    const j = rng.randInt(i+1);
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+}
+
+/*** ---------- Core helpers ---------- ***/
+function makeEmpty(R,C,val=null){ return Array.from({length:R},_=>Array.from({length:C},_=>val)); }
+function inb(r,c,R,C){ return r>=0 && r<R && c>=0 && c<C; }
+
+function can_place(grid, w, r0, c0, dr, dc){
+  const R=grid.length, C=grid[0].length;
+  let overlap=0;
+  for (let i=0;i<w.length;i++){
+    const r=r0+dr*i, c=c0+dc*i;
+    if (!inb(r,c,R,C)) return [false,0,0];
+    const cell=grid[r][c];
+    if (cell!==null && cell!==w[i]) return [false,0,0];
+    if (cell===w[i]) overlap++;
+  }
+  const new_cells = w.length - overlap;
+  return [true, overlap, new_cells];
+}
+
+function place(grid, used, w, r0, c0, dr, dc){
+  const path=[];
+  for (let i=0;i<w.length;i++){
+    const r=r0+dr*i, c=c0+dc*i;
+    grid[r][c]=w[i]; used[r][c]=true; path.push([r,c]);
+  }
+  return path;
+}
+
+function count_unused(used){
+  let s=0;
+  for (let r=0;r<used.length;r++)
+    for (let c=0;c<used[0].length;c++)
+      if (!used[r][c]) s++;
+  return s;
+}
+
+function solver_leftover(grid_lines, placed_words){
+  const R=grid_lines.length, C=grid_lines[0].length;
+  const grid = grid_lines.map(row=>row.split(""));
+  const mark = Array.from({length:R}, ()=>Array(C).fill(false));
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+  function inb2(r,c){ return r>=0 && r<R && c>=0 && c<C; }
+  function mark_word(w){
+    const L=w.length;
+    for (let r=0;r<R;r++) for (let c=0;c<C;c++) {
+      for (const [dr,dc] of dirs){
+        let rr=r, cc=c, ok=true;
+        for (let k=0;k<L;k++){
+          if (!inb2(rr,cc) || grid[rr][cc]!==w[k]){ ok=false; break; }
+          rr+=dr; cc+=dc;
+        }
+        if (ok){
+          rr=r; cc=c;
+          for (let k=0;k<L;k++){ mark[rr][cc]=true; rr+=dr; cc+=dc; }
+        }
+      }
+    }
+  }
+  for (const w of placed_words) mark_word(w);
+  let out="";
+  for (let r=0;r<R;r++) for (let c=0;c<C;c++) if (!mark[r][c]) out+=grid[r][c];
+  return out;
+}
+
+/*** ---------- Main generation attempt (one seed) ---------- ***/
+function generate_uniform_capped_once(R,C,solution,words,seed){
+  const rng = new XorShift32(seed);
+  const target = solution.length;
+  let grid = makeEmpty(R,C,null);
+  let used = makeEmpty(R,C,false);
+  let placed = [];
+  let paths = [];
+  let dir_counts = Object.fromEntries(Object.keys(DIRS).map(d=>[d,0]));
+
+  // RANDOMIZE selection: de-dup then shuffle, then prioritize by length (stable tie-break by shuffle)
+  const pool = Array.from(new Set(words));
+  shuffleInPlace(pool, rng);
+  pool.sort((a,b)=>b.length - a.length); // longer first, but ties stay randomized
+
+  function rebuild(){
+    grid = makeEmpty(R,C,null);
+    used = makeEmpty(R,C,false);
+    dir_counts = Object.fromEntries(Object.keys(DIRS).map(d=>[d,0]));
+    for (let i=0;i<placed.length;i++){
+      const [w,d,[r0,c0]] = placed[i];
+      const [dr,dc] = DIRS[d];
+      for (let k=0;k<w.length;k++){
+        const r=r0+dr*k, c=c0+dc*k;
+        grid[r][c]=w[k]; used[r][c]=true;
+      }
+      dir_counts[d]++;
+    }
+  }
+
+  for (const w of pool){
+    if (count_unused(used) <= target) break;
+    let best = null;
+    for (let t=0;t<200;t++){
+      const d = DIR_LIST[rng.randInt(DIR_LIST.length)];
+      const [dr,dc] = DIRS[d];
+      const total_after = placed.length+1;
+      const desired_low = Math.floor(total_after/8);
+      const desired_high = Math.ceil(total_after/8);
+      if (dir_counts[d]+1 > desired_high) continue;
+      const r0 = rng.randInt(R), c0 = rng.randInt(C);
+      const [ok, ov, newc] = can_place(grid,w,r0,c0,dr,dc);
+      if (!ok) continue;
+      if (count_unused(used)-newc < target) continue;
+      const bonus = (dir_counts[d] < desired_low) ? 20 : 0;
+      const score = ov*30 - newc*2 + bonus;
+      if (!best || score > best.score) best = {score, d, r0, c0, ov, newc};
+    }
+    if (!best) continue;
+    const {d,r0,c0} = best;
+    const [dr,dc] = DIRS[d];
+    const path = place(grid,used,w,r0,c0,dr,dc);
+    placed.push([w,d,[r0,c0]]);
+    paths.push(path);
+    dir_counts[d]++;
+  }
+
+  while (count_unused(used) < target && paths.length){
+    placed.pop(); paths.pop();
+    rebuild();
+  }
+
+  if (count_unused(used) !== target) return null;
+
+  // fill with solution letters
+  let letters = solution.split(""), idx=0;
+  for (let r=0;r<R;r++) for (let c=0;c<C;c++) if (!used[r][c]) grid[r][c]=letters[idx++];
+
+  const grid_lines = Array.from({length:R}, (_,r)=>grid[r].join(""));
+  const leftover = solver_leftover(grid_lines, placed.map(p=>p[0]));
+  if (leftover !== solution) return null;
+
+  return { grid: grid_lines, placed, dir_counts };
+}
+
+/*** ---------- Search loop & UI wiring ---------- ***/
+let running = false;
+let attempts = 0;
+let baseSeed = seedFromCrypto(); // new per page load
+
+function textAreaToWords(txt, minLen, maxLen, solution) {
+  const raw = txt.split(/\r?\n/).map(s=>norm(s)).filter(Boolean);
+  const set = new Set();
+  for (const w of raw) {
+    if (w && w!==solution && w.length>=minLen && w.length<=maxLen) set.add(w);
+  }
+  return Array.from(set);
+}
+
+function renderGrid(gridLines){
+  const host = document.getElementById("gridHost");
+  host.innerHTML = "";
+  host.style.gridTemplateRows = `repeat(${gridLines.length}, auto)`;
+  for (const row of gridLines){
+    const rowEl = document.createElement("div");
+    rowEl.className = "row";
+    rowEl.style.gridTemplateColumns = `repeat(${row.length}, 1fr)`;
+    for (const ch of row){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.textContent = ch;
+      rowEl.appendChild(cell);
+    }
+    host.appendChild(rowEl);
+  }
+}
+
+function updateStatus(msg, cls=""){
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status " + cls;
+}
+
+async function startSearch(){
+  if (running) return;
+  const R = +document.getElementById("rows").value;
+  const C = +document.getElementById("cols").value;
+  const sol = norm(document.getElementById("solution").value);
+  const minLen = +document.getElementById("minlen").value;
+  const maxLen = +document.getElementById("maxlen").value;
+  const maxAttempts = +document.getElementById("maxAttempts").value;
+  const txt = document.getElementById("wordlist").value;
+
+  if (!sol || sol.length > R*C){
+    updateStatus("Ungültiges Lösungswort (leer oder länger als R×C).", "err");
+    return;
+  }
+  running = true;
+  attempts = 0;
+  document.getElementById("attemptsPill").textContent = `Versuche: 0`;
+  document.getElementById("placedPill").textContent = `Platziert: 0`;
+  document.getElementById("wordsPlain").textContent = "";
+  document.getElementById("placements").textContent = "";
+  document.getElementById("gridSha").textContent = "";
+  document.getElementById("wordsSha").textContent = "";
+  document.getElementById("leftover").textContent = "";
+  document.getElementById("gridHost").innerHTML = "";
+
+  const words = textAreaToWords(txt, minLen, maxLen, sol);
+  if (!words.length){
+    updateStatus("Keine Wörter nach Filterung gefunden.", "err");
+    running = false; return;
+  }
+
+  updateStatus("Suche läuft …");
+  const chunk = 50;
+  function tryChunk(resolve){
+    if (!running){ resolve(null); return; }
+    for (let i=0;i<chunk;i++){
+      attempts++;
+      const res = generate_uniform_capped_once(R,C,sol,words,(baseSeed ^ attempts) | 0);
+      if (attempts % 50 === 0) {
+        updateStatus(`… noch keine Lösung, Versuche: ${attempts}`);
+        document.getElementById("attemptsPill").textContent = `Versuche: ${attempts}`;
+      }
+      if (res){ resolve(res); return; }
+      if (attempts >= maxAttempts){ resolve(null); return; }
+    }
+    setTimeout(()=>tryChunk(resolve), 0);
+  }
+  const result = await new Promise(resolve=>tryChunk(resolve));
+
+  if (!running) { updateStatus("Abgebrochen.", "warntext"); return; }
+  if (!result){
+    updateStatus(`Keine Lösung innerhalb von ${attempts} Versuchen. Max. Versuche erhöhen oder Parameter anpassen.`, "warntext");
+    running = false; return;
+  }
+
+  const {grid, placed} = result;
+  renderGrid(grid);
+  document.getElementById("attemptsPill").textContent = `Versuche: ${attempts}`;
+  document.getElementById("placedPill").textContent = `Platziert: ${placed.length}`;
+  document.getElementById("wordsPlain").textContent = placed.map(p=>p[0]).join("\n");
+  const placements = placed.map(p=>`${p[0]} ${p[1]} (${p[2][0]+1},${p[2][1]+1})`).join("\n");
+  document.getElementById("placements").textContent = placements;
+  const gridSha = sha1hex(grid.join("\n"));
+  const wordsSha = sha1hex(placed.map(p=>p[0]).join("\n"));
+  document.getElementById("gridSha").textContent = gridSha;
+  document.getElementById("wordsSha").textContent = wordsSha;
+  const leftover = solver_leftover(grid, placed.map(p=>p[0]));
+  document.getElementById("leftover").textContent = leftover;
+  updateStatus(leftover === sol ? `Fertig. Lösung nach ${attempts} Versuchen gefunden.` : `Warnung: leftover≠solution (${leftover} ≠ ${sol}).`, leftover===sol ? "ok" : "warntext");
+  buildPrintSheet(grid, placed.map(p=>p[0]), sol);
+  running = false;
+}
+
+function stopSearch(){
+  running = false;
+  updateStatus("Stoppsignal gesendet. (Warte ggf. auf aktuellen Block.)", "warntext");
+}
+
+/*** ---------- Print helpers ---------- ***/
+function buildPrintSheet(gridLines, wordsPlaced, solution){
+  const wl = document.getElementById("printWordlist");
+  const pg = document.getElementById("printGrid");
+  wl.textContent = wordsPlaced.join("\n");
+  pg.innerHTML = "";
+  for (const row of gridLines){
+    const r = document.createElement("div");
+    r.className = "gridRow";
+    for (const ch of row){
+      const c = document.createElement("div");
+      c.className = "gridCell";
+      c.textContent = ch;
+      r.appendChild(c);
+    }
+    pg.appendChild(r);
+  }
+  document.getElementById("solutionPlaceholder").setAttribute("data-len", solution.length);
+}
+
+function ensurePrintSheetFromCurrent(){
+  const words = (document.getElementById("wordsPlain").textContent || "").trim().split(/\r?\n/).filter(Boolean);
+  const gridDom = document.querySelectorAll("#gridHost .row");
+  if (gridDom.length && words.length){
+    const gridLines = Array.from(gridDom).map(row => Array.from(row.children).map(c=>c.textContent).join(""));
+    const sol = norm(document.getElementById("solution").value);
+    buildPrintSheet(gridLines, words, sol);
+    return true;
+  }
+  return false;
+}
+
+function openPrint(){
+  // Desktop-friendly: try to open native print dialog
+  ensurePrintSheetFromCurrent();
+  window.print();
+}
+
+// In-page preview (mobile-friendly)
+function enterPreview(){
+  if (!ensurePrintSheetFromCurrent()){
+    alert("Erst Puzzle erzeugen (Starten) – dann Vorschau.");
+    return;
+  }
+  document.body.classList.add("preview");
+}
+function leavePreview(){
+  document.body.classList.remove("preview");
+}
+
+// Download full app HTML
+function downloadHTML(){
+  const blob = new Blob([document.documentElement.outerHTML], {type: "text/html"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "woertraetsel_printable.html";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Download print-only HTML
+function downloadPrintOnly(){
+  if (!ensurePrintSheetFromCurrent()){
+    alert("Erst Puzzle erzeugen (Starten) – dann speichern.");
+    return;
+  }
+  const sheet = document.getElementById("sheetRoot").outerHTML;
+  const html = `<!doctype html>
+<html lang="de"><head><meta charset="utf-8"/>
+<title>Worträtsel – Druckseite</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm; }
+  body { background:#fff; color:#000; margin:0; }
+  .sheet { width:100%; height:auto; background:#fff; color:#000;
+    display:grid; grid-template-columns: 1fr 2fr; grid-template-rows: auto 1fr auto; gap: 10mm; padding: 4mm; box-sizing: border-box; }
+  .gridRow { display:grid; grid-auto-flow: column; gap:1.5mm; }
+  .gridCell { width:8.5mm; height:8.5mm; border:0.4mm solid #000; display:flex; align-items:center; justify-content:center; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:9pt; background:#fff; color:#000;}
+  .wordlist { font-size:11pt; line-height:1.35; white-space:pre-wrap; border:1px solid #000; padding:6mm; border-radius:2mm; background:#fff; }
+  .solutionBox { border-top:0.4mm solid #000; padding-top:5mm; font-size:12pt; }
+  .title { font-size:16pt; font-weight:700; }
+</style></head><body onload="setTimeout(()=>window.print && window.print(), 0)">
+${sheet}
+</body></html>`;
+  const blob = new Blob([html], {type:"text/html"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "woertraetsel_druckseite.html";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/*** ---------- File handling & defaults ---------- ***/
+document.getElementById("run").addEventListener("click", (e)=>{ e.preventDefault(); startSearch(); });
+document.getElementById("stop").addEventListener("click", (e)=>{ e.preventDefault(); stopSearch(); });
+document.getElementById("printBtn").addEventListener("click", (e)=>{ e.preventDefault(); openPrint(); });
+document.getElementById("previewBtn").addEventListener("click", (e)=>{ e.preventDefault(); enterPreview(); });
+document.getElementById("leavePreview").addEventListener("click", (e)=>{ e.preventDefault(); leavePreview(); });
+document.getElementById("systemPrint").addEventListener("click", (e)=>{ e.preventDefault(); window.print(); });
+document.getElementById("downloadBtn").addEventListener("click", (e)=>{ e.preventDefault(); downloadHTML(); });
+document.getElementById("downloadPrintOnlyBtn").addEventListener("click", (e)=>{ e.preventDefault(); downloadPrintOnly(); });
+
+document.getElementById("file").addEventListener("change", async (ev)=>{
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  const txt = await file.text();
+  document.getElementById("wordlist").value = txt;
+});
+
+document.getElementById("loadDefault").addEventListener("click", ()=>{
+  document.getElementById("wordlist").value = DEFAULT_WORDS.trim();
+  updateStatus("Standardliste geladen.");
+});
+
+/*** ---------- Default list (short placeholder) ---------- ***/
+const DEFAULT_WORDS = `
+Anakonda
+Amsel
+Affe
+Ampel
+Auto
+Bagger
+Banane
+Baum
+Bett
+Biene
+Boot
+Brot
+Buch
+Bus
+Clown
+Computer
+Dach
+Dachs
+Donner
+Dorf
+Eis
+Eisbär
+Elefant
+Engel
+Erde
+Feuerwehr
+Fisch
+Fledermaus
+Fluss
+Foto
+Frühling
+Fuchs
+Gabel
+Gans
+Garten
+Giraffe
+Gold
+Gorilla
+Gurke
+Hahn
+Hammer
+Hand
+Haus
+Hilfe
+Himmel
+Hund
+Hut
+Igel
+Insel
+Jacke
+Juli
+Kabel
+Kaffee
+Kamel
+Katze
+Kerze
+Kette
+Kind
+Kino
+Kirsche
+Kiste
+Klopfen
+Kochtopf
+Koffer
+König
+Kopf
+Korb
+Kuh
+Lachen
+Lampe
+Land
+Löffel
+Löwe
+Luft
+Mädchen
+Mann
+Mund
+Musik
+Nase
+Nest
+Note
+Oma
+Opa
+Orange
+Otter
+Paket
+Papier
+Pferd
+Pflaume
+Pilz
+Pinguin
+Polizei
+Puppe
+Quark
+Rakete
+Regen
+Reise
+Ring
+Ritter
+Robbe
+Rose
+Sack
+Salz
+Sand
+Schiff
+Schlange
+Schlüssel
+Schmetterling
+Schnee
+Schokolade
+Schule
+Schwein
+See
+Seestern
+Segelboot
+Seil
+Sonne
+Spinne
+Sport
+Stadt
+Stuhl
+Sturm
+Tante
+Tasche
+Tiger
+Tisch
+Topf
+Turm
+Uhr
+Urlaub
+Vater
+Vogel
+Wald
+Wasser
+Welt
+Wind
+Winter
+Wolke
+Zahn
+Zebra
+Zelt
+Zitrone
+Zoo
+Zug
+`;
+document.getElementById("wordlist").value = DEFAULT_WORDS.trim();
+</script>
+</body>
+</html>
