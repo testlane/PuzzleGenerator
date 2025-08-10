@@ -439,6 +439,8 @@ function updateStatus(msg, cls=""){
 }
 
 async function startSearch(){
+  baseSeed = seedFromCrypto(); // reseed each run
+
   if (running) return;
   const R = +document.getElementById("rows").value;
   const C = +document.getElementById("cols").value;
