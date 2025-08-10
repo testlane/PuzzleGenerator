@@ -260,6 +260,27 @@ function shuffleInPlace(arr, rng){
     const j = rng.randInt(i+1);
     [arr[i],arr[j]] = [arr[j],arr[i]];
   }
+/** Weighted random order that favors longer words but varies every run.
+    Uses Gumbel-top-k trick: key = log(w_i) + Gumbel(0), sort by key desc.
+    weight(length) = length ** alpha (alpha > 1 strengthens the preference). */
+function weightedShuffle(words, rng, alpha=1.5){
+  function gumbel(){
+    // ensure (0,1) exclusive
+    let u = rng.next();
+    while (u <= 0 || u >= 1) u = rng.next();
+    return -Math.log(-Math.log(u));
+  }
+  // Precompute keys
+  const scored = words.map(w => {
+    const L = Math.max(1, w.length);
+    const weight = Math.pow(L, alpha);
+    const key = Math.log(weight) + gumbel();
+    return { w, key };
+  });
+  scored.sort((a,b) => b.key - a.key);
+  return scored.map(s => s.w);
+}
+
 }
 
 /*** ---------- Core helpers ---------- ***/
